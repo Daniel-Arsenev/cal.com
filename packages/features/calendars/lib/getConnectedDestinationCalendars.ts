@@ -402,9 +402,9 @@ export async function getConnectedDestinationCalendarsAndEnsureDefaultsInDb({
       // we do not have this problem, so I do not care
       const freeRows = await prisma.selectedCalendar.findMany({
         where: {
-          id: { in: appSelectedCal.map((cal) => cal.id) }
+          id: { in: selectedCalendars.map((cal) => cal.id) }
         },
-        select: { externalId: true, free: true },
+        select: { id: true, free: true },
       });
       const freeById = new Map<string, boolean>(freeRows.map((r) => [r.id, r.free]));
       connectedCalendars.push({
@@ -418,7 +418,7 @@ export async function getConnectedDestinationCalendarsAndEnsureDefaultsInDb({
           .map((cal) => ({
             ...cal,
             isSelected: true,
-            isFree: freeById(cal.id) ?? null,
+            isFree: freeById.get(cal.id) ?? null,
             readOnly: false,
             primary: null,
             credentialId: credential.id,
