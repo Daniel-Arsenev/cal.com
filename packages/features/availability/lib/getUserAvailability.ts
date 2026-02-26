@@ -43,6 +43,7 @@ import type { TimeRange, WorkingHours as WorkingHoursWithUserId } from "@calcom/
 import * as Sentry from "@sentry/nextjs";
 import { z } from "zod";
 import { detectEventTypeScheduleForUser } from "./detectEventTypeScheduleForUser";
+import { getBusyCalendarTimes } from "@calcom/features/calendars/lib/CalendarManager";
 
 const log = logger.getSubLogger({ prefix: ["getUserAvailability"] });
 
@@ -414,7 +415,7 @@ export class UserAvailabilityService {
       finalTimezone = schedule.timeZone;
     }
 
-    const workingHours = getWorkingHours({ timeZone: finalTimezone }, availability);
+    let workingHours = getWorkingHours({ timeZone: finalTimezone }, availability);
 
     const dateOverrides: TimeRange[] = [];
     // NOTE: getSchedule is currently calling this function for every user in a team event
@@ -489,7 +490,7 @@ export class UserAvailabilityService {
       );
     }
 
-    const { dateRanges, oooExcludedDateRanges } = buildDateRanges({
+    let { dateRanges, oooExcludedDateRanges } = buildDateRanges({
       dateFrom,
       dateTo,
       availability,
@@ -497,6 +498,26 @@ export class UserAvailabilityService {
       travelSchedules,
       outOfOffice: datesOutOfOffice,
     });
+
+    const selectedCalendars = eventType?.useEventLevelSelectedCalendars
+      ? user.allSelectedCalendars.filter((calendar) => calendar.eventTypeId === eventType.id)
+      : user.userLevelSelectedCalendars;
+
+    const calendarAvailableTimesQuery = await getBusyCalendarTimes(
+      user.credentials,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+      selectedCalendars.filter((cal) => cal.free),
+      mode
+    );
+
+    // does not account for time zones, but we are in utc anyway so who cares
+    dateRanges.push(...calendarAvailableTimesQuery.data.map((value) => ({
+        start: dayjs(value.start),
+        end: dayjs(value.end),
+      })
+    ));
+
 
     if (dateRanges.length === 0)
       return {
@@ -527,10 +548,6 @@ export class UserAvailabilityService {
     // TODO: only query what we need after applying limits (shrink date range)
     const getBusyTimesStart = dateFrom.toISOString();
     const getBusyTimesEnd = dateTo.toISOString();
-
-    const selectedCalendars = eventType?.useEventLevelSelectedCalendars
-      ? user.allSelectedCalendars.filter((calendar) => calendar.eventTypeId === eventType.id)
-      : user.userLevelSelectedCalendars;
 
     let busyTimesFromLimits: EventBusyDetails[] = [];
 
@@ -589,7 +606,7 @@ export class UserAvailabilityService {
         username: `${user.username}`,
         beforeEventBuffer,
         afterEventBuffer,
-        selectedCalendars,
+        selectedCalendars: selectedCalendars.filter((cal) => !cal.free),
         seatedEvent: !!eventType?.seatsPerTimeSlot,
         rescheduleUid: initialData?.rescheduleUid || null,
         duration,

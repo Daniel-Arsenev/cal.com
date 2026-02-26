@@ -11,6 +11,7 @@ import { ORGANIZER_EMAIL_EXEMPT_DOMAINS } from "@calcom/lib/constants";
 import { buildNonDelegationCredentials } from "@calcom/lib/delegationCredential";
 import { formatCalEvent } from "@calcom/lib/formatCalendarEvent";
 import logger from "@calcom/lib/logger";
+import { prisma } from "@calcom/prisma";
 import { getPiiFreeCalendarEvent, getPiiFreeCredential } from "@calcom/lib/piiFreeData";
 import { safeStringify } from "@calcom/lib/safeStringify";
 import type {
@@ -104,10 +105,12 @@ export const getCalendarCredentialsWithoutDelegation = (credentials: CredentialP
 export type ConnectedCalendar = Omit<IntegrationCalendar, "primary"> & {
   primary: boolean | null;
   isSelected: boolean;
+  isFree: boolean | null
   readOnly: boolean;
   credentialId: number;
   delegationCredentialId: string | null;
 };
+
 
 export const getConnectedCalendars = async (
   calendarCredentials: ReturnType<typeof getCalendarCredentials>,
@@ -154,6 +157,15 @@ export const getConnectedCalendars = async (
           };
         }
         const cals = await calendarInstance.listCalendars();
+        // hacky but works
+        // well this is buggy when multiple uses share the same calendar but whatever
+        const freeRows = await prisma.selectedCalendar.findMany({
+          where: {
+            externalId: { in: selectedCalendars.map((cal) => cal.externalId) }
+          },
+          select: { externalId: true, free: true },
+        });
+        const freeById = new Map<string, boolean>(freeRows.map((r) => [r.externalId, r.free]));
         const calendars: ConnectedCalendar[] = sortBy(
           cals.map((cal: IntegrationCalendar) => {
             return {
@@ -161,6 +173,7 @@ export const getConnectedCalendars = async (
               readOnly: cal.readOnly || false,
               primary: cal.primary || null,
               isSelected: selectedCalendars.some((selected) => selected.externalId === cal.externalId),
+              isFree: freeById.get(cal.externalId) ?? null,
               credentialId,
               delegationCredentialId,
             };

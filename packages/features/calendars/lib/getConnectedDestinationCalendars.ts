@@ -397,6 +397,16 @@ export async function getConnectedDestinationCalendarsAndEnsureDefaultsInDb({
         item.credential as CredentialDataWithTeamName & { selectedCalendars: { id: string }[] };
 
       const safeToSendIntegration = cleanIntegrationKeys(integration);
+      // hacky but works
+      // well this is probably buggy when multiple uses share the same calendar but whatever
+      // we do not have this problem, so I do not care
+      const freeRows = await prisma.selectedCalendar.findMany({
+        where: {
+          id: { in: appSelectedCal.map((cal) => cal.id) }
+        },
+        select: { externalId: true, free: true },
+      });
+      const freeById = new Map<string, boolean>(freeRows.map((r) => [r.id, r.free]));
       connectedCalendars.push({
         integration: safeToSendIntegration,
         credentialId: credential.id,
@@ -408,6 +418,7 @@ export async function getConnectedDestinationCalendarsAndEnsureDefaultsInDb({
           .map((cal) => ({
             ...cal,
             isSelected: true,
+            isFree: freeById(cal.id) ?? null,
             readOnly: false,
             primary: null,
             credentialId: credential.id,
@@ -416,6 +427,8 @@ export async function getConnectedDestinationCalendarsAndEnsureDefaultsInDb({
       });
     });
   }
+
+
 
   const noConflictingNonDelegatedConnectedCalendars = _ensureNoConflictingNonDelegatedConnectedCalendar({
     connectedCalendars,

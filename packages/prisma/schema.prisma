@@ -1024,6 +1024,9 @@ model SelectedCalendar {
   channelResourceUri String?
   channelExpiration  DateTime? @db.Timestamp(3)
 
+  // If true the connected calender set availability instead of removing it
+  free Boolean @default(false)
+
   // Used to calendar cache and sync
   syncSubscribedAt         DateTime? @db.Timestamp(3)
   syncSubscribedErrorAt    DateTime? @db.Timestamp(3)

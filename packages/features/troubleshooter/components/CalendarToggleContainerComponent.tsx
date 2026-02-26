@@ -92,6 +92,7 @@ interface ConnectedCalendarItem {
   calendars?: {
     primary: boolean | null;
     isSelected: boolean;
+    isFree: boolean | null;
     name?: string;
   }[];
 }

@@ -31,7 +31,11 @@ type SelectedCalendarsSettingsWebWrapperProps = {
   connectedCalendars?: RouterOutputs["viewer"]["calendars"]["connectedCalendars"];
 };
 
+// global state is evil... but we are using it for unique ids so its fine
+let id = 0;
+
 const ConnectedCalendarList = ({
+  isFree,
   fromOnboarding = false,
   scope,
   items,
@@ -41,6 +45,7 @@ const ConnectedCalendarList = ({
   destinationCalendarId,
   isDisabled,
 }: {
+  isFree: bool;
   fromOnboarding?: boolean;
   scope: SelectedCalendarSettingsScope;
   items: RouterOutputs["viewer"]["calendars"]["connectedCalendars"]["connectedCalendars"];
@@ -78,10 +83,11 @@ const ConnectedCalendarList = ({
               <div className="border-subtle border-t">
                 {!fromOnboarding && (
                   <>
-                    <p className="text-subtle px-5 pt-4 text-sm">{t("toggle_calendars_conflict")}</p>
+                    <p className="text-subtle px-5 pt-4 text-sm">{t(isFree ? "toggle_calendars_free" : "toggle_calendars_conflict")}</p>
                     <ul className="stack-y-4 px-5 py-4">
                       {connectedCalendar.calendars?.map((cal) => (
                         <CalendarSwitch
+                          isFree={isFree}
                           disabled={isDisabled}
                           key={cal.externalId}
                           externalId={cal.externalId}
@@ -98,6 +104,8 @@ const ConnectedCalendarList = ({
                             return null;
                           })()}
                           delegationCredentialId={connectedCalendar.delegationCredentialId || null}
+                          groupId = {cal.externalId}
+                          uniqueId = {id++}
                         />
                       ))}
                     </ul>
@@ -173,31 +181,70 @@ export const SelectedCalendarsSettingsWebWrapper = (props: SelectedCalendarsSett
     isDisabled = disabledScope === scope;
   }
 
+  const connectedCalendars = query.data.connectedCalendars ?? [];
+
+  const conflictCalenders =
+    connectedCalendars.map((connectedCalendar) => ({
+      ...connectedCalendar,
+      calendars: connectedCalendar.calendars.map(calendar =>
+        !calendar.isFree ? calendar : {...calendar, isSelected: false})
+    }));
+
+  const freeCalenders =
+    connectedCalendars.map((connectedCalendar) => ({
+      ...connectedCalendar,
+      calendars: connectedCalendar.calendars.map(calendar =>
+        calendar.isFree ? calendar : {...calendar, isSelected: false})
+    }));
+
   const shouldDisableConnectionModification = isDisabled || disableConnectionModification;
   return (
-    <div>
-      <SelectedCalendarsSettings classNames={props.classNames}>
-        <SelectedCalendarsSettingsHeading
-          isConnectedCalendarsPresent={!!query.data?.connectedCalendars.length}
-          isPending={isPending}
-          showScopeSelector={showScopeSelector}
-          setScope={setScope}
-          scope={scope}
-          shouldDisableConnectionModification={shouldDisableConnectionModification}
-        />
-        {!!(query.data?.connectedCalendars && query.data?.connectedCalendars.length > 0) && (
+    <>
+      <div>
+        <SelectedCalendarsSettings classNames={props.classNames}>
+          <SelectedCalendarsSettingsHeading
+            isFree={false}
+            isPending={isPending}
+            showScopeSelector={showScopeSelector}
+            setScope={setScope}
+            scope={scope}
+            shouldDisableConnectionModification={shouldDisableConnectionModification}
+          />
           <ConnectedCalendarList
+            isFree={false}
             fromOnboarding={props.fromOnboarding}
             scope={scope}
             disableConnectionModification={disableConnectionModification}
             onChanged={props.onChanged}
             eventTypeId={eventTypeId}
-            items={query.data.connectedCalendars}
+            items={conflictCalenders}
             isDisabled={isDisabled}
           />
-        )}
-      </SelectedCalendarsSettings>
-    </div>
+        </SelectedCalendarsSettings>
+      </div>
+      <div>
+        <SelectedCalendarsSettings classNames={props.classNames}>
+          <SelectedCalendarsSettingsHeading
+            isFree={true}
+            isPending={isPending}
+            showScopeSelector={showScopeSelector}
+            setScope={setScope}
+            scope={scope}
+            shouldDisableConnectionModification={shouldDisableConnectionModification}
+          />
+          <ConnectedCalendarList
+            isFree={true}
+            fromOnboarding={props.fromOnboarding}
+            scope={scope}
+            disableConnectionModification={disableConnectionModification}
+            onChanged={props.onChanged}
+            eventTypeId={eventTypeId}
+            items={freeCalenders}
+            isDisabled={isDisabled}
+          />
+        </SelectedCalendarsSettings>
+      </div>
+    </>
   );
 };
 
@@ -240,7 +287,7 @@ export const SelectedCalendarsSettingsWebWrapperSkeleton = () => {
 };
 
 const SelectedCalendarsSettingsHeading = (props: {
-  isConnectedCalendarsPresent: boolean;
+  isFree: bool;
   isPending?: boolean;
   showScopeSelector: boolean;
   setScope: (scope: SelectedCalendarSettingsScope) => void;
@@ -257,17 +304,15 @@ const SelectedCalendarsSettingsHeading = (props: {
     <div className="border-subtle border-b p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h4 className="text-emphasis text-base font-semibold leading-5">{t("check_for_conflicts")}</h4>
-          <p className="text-default text-sm leading-tight">{t("select_calendars")}</p>
+          <h4 className="text-emphasis text-base font-semibold leading-5">{t(props.isFree ? "check_for_free_title" : "check_for_conflicts_title")}</h4>
+          <p className="text-default text-sm leading-tight">{t(props ? "check_for_free_subtitle" : "check_for_conflicts_subtitle")}</p>
         </div>
 
         {!props.shouldDisableConnectionModification && (
           <div className="flex flex-col xl:flex-row xl:space-x-5">
-            {props.isConnectedCalendarsPresent && (
-              <div className="flex items-center">
-                <AdditionalCalendarSelector isPending={props.isPending} />
-              </div>
-            )}
+            <div className="flex items-center">
+              <AdditionalCalendarSelector isPending={props.isPending} />
+            </div>
           </div>
         )}
       </div>

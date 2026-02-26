@@ -5,6 +5,7 @@ import { ArrowLeftIcon, RotateCwIcon } from "@coss/ui/icons";
 import type { ReactNode } from "react";
 
 export type ICalendarSwitchProps = {
+  isFree: boolean;
   title: string;
   externalId: string;
   type: string;
@@ -16,6 +17,8 @@ export type ICalendarSwitchProps = {
   delegationCredentialId: string | null;
   eventTypeId: number | null;
   disabled?: boolean;
+  groupId?: string;
+  uniqueId: string;
 };
 
 export function CalendarSwitchComponent(

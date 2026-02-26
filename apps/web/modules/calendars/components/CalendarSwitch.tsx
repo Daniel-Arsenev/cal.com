@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { trpc } from "@calcom/trpc/react";
@@ -17,8 +17,16 @@ type EventCalendarSwitchProps = ICalendarSwitchProps & {
   eventTypeId: number;
 };
 
+const GROUP_EVENT = "calcom:calendar-switch-group-toggle";
+
+type GroupToggleDetail = {
+  groupId: string;
+  uniqueId: string;
+};
+
 const CalendarSwitch = (props: ICalendarSwitchProps) => {
   const {
+    isFree,
     title,
     externalId,
     type,
@@ -28,10 +36,20 @@ const CalendarSwitch = (props: ICalendarSwitchProps) => {
     delegationCredentialId,
     eventTypeId,
     disabled,
+    groupId,
+    uniqueId,
   } = props;
+
   const [checkedInternal, setCheckedInternal] = useState(isChecked);
+  const checkedRef = useRef(checkedInternal);
+
   const utils = trpc.useUtils();
   const { t } = useLocale();
+
+  useEffect(() => {
+    checkedRef.current = checkedInternal;
+  }, [checkedInternal]);
+
   const mutation = useMutation({
     mutationFn: async ({ isOn }: { isOn: boolean }) => {
       const body = {
@@ -41,6 +59,7 @@ const CalendarSwitch = (props: ICalendarSwitchProps) => {
         // new URLSearchParams does not accept numbers
         credentialId: String(credentialId),
         ...(eventTypeId ? { eventTypeId: String(eventTypeId) } : {}),
+        free: isFree,
       };
 
       if (isOn) {
@@ -77,6 +96,21 @@ const CalendarSwitch = (props: ICalendarSwitchProps) => {
       showToast(`Something went wrong when toggling "${title}"`, "error");
     },
   });
+
+  useEffect(() => {
+    if (!groupId) return;
+    const handler = (evt: Event) => {
+      const detail = (evt as CustomEvent<GroupToggleDetail>).detail;
+      if (!detail) return;
+      if (detail.groupId !== groupId) return;
+      if (detail.uniqueId === uniqueId) return;
+      if (!checkedRef.current) return;
+      setCheckedInternal(false);
+    };
+    window.addEventListener(GROUP_EVENT, handler as EventListener);
+    return () => window.removeEventListener(GROUP_EVENT, handler as EventListener);
+  }, [groupId, externalId]);
+
   return (
     <div className={classNames("my-2 flex flex-row items-center")}>
       <div className="flex pl-2">
@@ -85,11 +119,20 @@ const CalendarSwitch = (props: ICalendarSwitchProps) => {
           checked={checkedInternal}
           disabled={disabled || mutation.isPending}
           onCheckedChange={async (isOn: boolean) => {
+            if (isOn && groupId) {
+              window.dispatchEvent(
+                new CustomEvent<GroupToggleDetail>(GROUP_EVENT, {
+                  detail: { groupId, uniqueId },
+                })
+              );
+            }
+
             setCheckedInternal(isOn);
-            await mutation.mutate({ isOn });
+            await mutation.mutateAsync({ isOn });
           }}
         />
       </div>
+
       <label
         className={classNames(
           "ml-3 break-all text-sm font-medium leading-5",
@@ -104,9 +147,8 @@ const CalendarSwitch = (props: ICalendarSwitchProps) => {
           {t("adding_events_to")}
         </span>
       )}
-      {mutation.isPending && (
-        <RotateCwIcon className="text-muted h-4 w-4 animate-spin ltr:ml-1 rtl:mr-1" />
-      )}
+      {mutation.isPending &&
+        <RotateCwIcon className="text-muted h-4 w-4 animate-spin ltr:ml-1 rtl:mr-1" />}
     </div>
   );
 };

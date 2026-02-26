@@ -23,6 +23,7 @@ const selectedCalendarSelectSchema = z.object({
   credentialId: z.coerce.number(),
   delegationCredentialId: z.string().nullish().default(null),
   eventTypeId: z.coerce.number().nullish(),
+  free: z.coerce.boolean().default(false),
 });
 
 async function authMiddleware() {
@@ -72,7 +73,7 @@ async function postHandler(req: NextRequest) {
   const user = await authMiddleware();
 
   const body = await req.json();
-  const { integration, externalId, credentialId, eventTypeId, delegationCredentialId } =
+  const { integration, externalId, credentialId, eventTypeId, delegationCredentialId, free } =
     selectedCalendarSelectSchema.parse(body);
 
   await SelectedCalendarRepository.upsert({
@@ -82,6 +83,7 @@ async function postHandler(req: NextRequest) {
     credentialId,
     delegationCredentialId,
     eventTypeId: eventTypeId ?? null,
+    free,
   });
 
   return NextResponse.json({ message: "Calendar Selection Saved" });
